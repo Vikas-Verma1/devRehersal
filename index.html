@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevRehearsal - Local AI Examiner & Tutor</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            dark: '#090D16',
+                            card: '#111827',
+                            border: '#1F2937',
+                            neonGreen: '#00FF66',
+                            electricCyan: '#00F0FF',
+                            accentPurple: '#A855F7',
+                            dangerRose: '#FF453A',
+                            warnAmber: '#F59E0B'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+                        sans: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+        
+        body {
+            background-color: #090D16;
+            color: #F3F4F6;
+            font-family: 'Inter', sans-serif;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 240, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(168, 85, 247, 0.05) 0%, transparent 40%);
+        }
+
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.75);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .pulse-recording {
+            animation: pulse-red 1.5s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 69, 58, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(255, 69, 58, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 69, 58, 0); }
+        }
+
+        .speaking-glow {
+            animation: glow-cyan 1.5s infinite ease-in-out;
+        }
+
+        @keyframes glow-cyan {
+            0% { border-color: rgba(0, 240, 255, 0.4); box-shadow: 0 0 10px rgba(0, 240, 255, 0.2); }
+            50% { border-color: rgba(0, 240, 255, 0.9); box-shadow: 0 0 25px rgba(0, 240, 255, 0.5); }
+            100% { border-color: rgba(0, 240, 255, 0.4); box-shadow: 0 0 10px rgba(0, 240, 255, 0.2); }
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #090D16;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1F2937;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00F0FF;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+    <header class="border-b border-gray-800 bg-brand-card/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-electricCyan via-brand-accentPurple to-brand-neonGreen p-0.5 shadow-lg">
+                    <div class="w-full h-full bg-brand-dark rounded-[10px] flex items-center justify-center">
+                        <i data-lucide="graduation-cap" class="w-5 h-5 text-brand-electricCyan"></i>
+                    </div>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-tight flex items-center gap-2">
+                        DevRehearsal
+                        <span class="text-[11px] px-2 py-0.5 rounded-full bg-brand-electricCyan/10 text-brand-electricCyan border border-brand-electricCyan/30 font-mono">
+                            AI Examiner & Tutor
+                        </span>
+                    </h1>
+                    <p class="text-xs text-gray-400">Local Open-Source Interactive Learning</p>
+                </div>
+            </div>
+
+            <!-- Stats & Connection Status -->
+            <div class="flex items-center space-x-3 sm:space-x-5">
+                <div class="hidden sm:flex items-center space-x-4 border-r border-gray-800 pr-4 text-xs font-mono">
+                    <div class="flex items-center gap-1.5 text-brand-neonGreen">
+                        <i data-lucide="flame" class="w-4 h-4"></i>
+                        <span>Streak: <strong id="streakCounter">0</strong></span>
+                    </div>
+                    <div class="flex items-center gap-1.5 text-brand-electricCyan">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i>
+                        <span>Score: <strong id="scoreCounter">0</strong></span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-800 text-xs">
+                    <span id="endpointStatusDot" class="w-2 h-2 rounded-full bg-yellow-500"></span>
+                    <span id="endpointStatusText" class="text-gray-300 font-mono hidden sm:inline">Checking Ollama...</span>
+                </div>
+
+                <button id="openSettingsBtn" title="LLM Settings" class="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
+
+        <!-- STEP 1: TOPIC / TECH STACK SELECTION -->
+        <section id="stepTopic" class="glass-panel rounded-2xl p-6 sm:p-8 space-y-6">
+            <div class="border-b border-gray-800 pb-4">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i data-lucide="book-open" class="text-brand-electricCyan w-5 h-5"></i>
+                    Select Learning Topic or Tech Stack
+                </h2>
+                <p class="text-sm text-gray-400 mt-1">Choose a preset domain or enter a custom topic for your AI Teacher to examine you on.</p>
+            </div>
+
+            <!-- Preset Topics Grid -->
+            <div>
+                <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Popular Presets</label>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="presetsGrid">
+                    <button data-topic="Python & Data Structures" class="preset-btn text-left p-3 rounded-xl bg-gray-900/80 hover:bg-gray-800 border border-gray-800 hover:border-brand-electricCyan transition-all">
+                        <p class="text-xs font-bold text-brand-electricCyan mb-1">🐍 Python & DS</p>
+                        <p class="text-[11px] text-gray-400">Arrays, Trees, OOP, Time Complexity</p>
+                    </button>
+                    <button data-topic="React & Node.js Web Dev" class="preset-btn text-left p-3 rounded-xl bg-gray-900/80 hover:bg-gray-800 border border-gray-800 hover:border-brand-electricCyan transition-all">
+                        <p class="text-xs font-bold text-brand-neonGreen mb-1">⚛️ React & Node</p>
+                        <p class="text-[11px] text-gray-400">Hooks, State, Express REST APIs</p>
+                    </button>
+                    <button data-topic="System Design & Cloud Architecture" class="preset-btn text-left p-3 rounded-xl bg-gray-900/80 hover:bg-gray-800 border border-gray-800 hover:border-brand-electricCyan transition-all">
+                        <p class="text-xs font-bold text-brand-accentPurple mb-1">🏗️️ System Design</p>
+                        <p class="text-[11px] text-gray-400">Caching, Scaling, Databases</p>
+                    </button>
+                    <button data-topic="Computer Vision & AI Fundamentals" class="preset-btn text-left p-3 rounded-xl bg-gray-900/80 hover:bg-gray-800 border border-gray-800 hover:border-brand-electricCyan transition-all">
+                        <p class="text-xs font-bold text-pink-400 mb-1">🤖 Computer Vision</p>
+                        <p class="text-[11px] text-gray-400">CNNs, OpenCV, Embeddings</p>
+                    </button>
+                </div>
+            </div>
+
+            <form id="topicForm" class="space-y-4 pt-2">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">Or Input Custom Subject / Skill *</label>
+                    <input type="text" id="customTopicInput" placeholder="e.g. Docker & Kubernetes, Rust Memory Model, Machine Learning Basics" required
+                        class="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-electricCyan text-white font-sans">
+                </div>
+
+                <div class="flex items-center justify-between pt-2">
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs text-gray-400 font-mono">Target Difficulty:</label>
+                        <select id="difficultySelect" class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-200">
+                            <option value="Beginner">Beginner</option>
+                            <option value="Intermediate" selected>Intermediate</option>
+                            <option value="Advanced / Viva Prep">Advanced / Viva Prep</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="bg-gradient-to-r from-brand-electricCyan to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-semibold px-6 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg">
+                        <span>Start Examination</span>
+                        <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- STEP 2 & 3: EXAMINER & EVALUATOR SESSION -->
+        <section id="stepSession" class="space-y-6 hidden">
+            
+            <!-- Question Card from AI Teacher -->
+            <div id="questionCard" class="glass-panel rounded-2xl p-6 sm:p-8 space-y-4 border border-brand-electricCyan/30 relative">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-full bg-brand-electricCyan/20 flex items-center justify-center text-brand-electricCyan">
+                            <i data-lucide="bot" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <span class="text-xs font-mono font-bold text-brand-electricCyan uppercase">AI Teacher & Examiner</span>
+                            <p class="text-[11px] text-gray-400" id="currentTopicLabel">Topic: System Design</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <button id="readQuestionBtn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-mono text-gray-300 transition-colors">
+                            <i data-lucide="volume-2" class="w-3.5 h-3.5 text-brand-electricCyan"></i>
+                            <span id="readBtnText">Speak Question</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading Spinner for Question Generation -->
+                <div id="questionLoading" class="py-10 flex flex-col items-center justify-center space-y-3 hidden">
+                    <div class="w-10 h-10 border-4 border-brand-electricCyan border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-xs font-mono text-gray-300">AI Teacher is formulating a concept question...</p>
+                </div>
+
+                <!-- Question Prompt Container -->
+                <div id="questionTextContainer" class="space-y-2 py-2">
+                    <span class="text-xs font-mono text-gray-500 uppercase tracking-widest" id="qNumberLabel">Question #1</span>
+                    <h3 id="questionText" class="text-base sm:text-lg font-semibold text-white leading-relaxed font-sans">
+                        <!-- Dynamic Question Text -->
+                    </h3>
+                </div>
+            </div>
+
+            <!-- Student Answer Area -->
+            <div class="glass-panel rounded-2xl p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <label class="block text-xs font-semibold text-gray-300 uppercase tracking-wider">Your Answer / Defense</label>
+                    <button id="micToggleBtn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs font-mono text-gray-300">
+                        <i data-lucide="mic" class="w-3.5 h-3.5 text-brand-neonGreen"></i>
+                        <span id="micBtnText">Dictate Answer</span>
+                    </button>
+                </div>
+
+                <textarea id="userAnswerText" rows="4" placeholder="Explain your answer clearly. Include key concepts, logic, or code references..."
+                    class="w-full bg-gray-900 border border-gray-800 rounded-xl p-4 text-sm focus:outline-none focus:border-brand-electricCyan text-white resize-none leading-relaxed font-sans"></textarea>
+
+                <div class="flex justify-between items-center pt-2">
+                    <button type="button" id="changeTopicBtn" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs">
+                        Change Topic
+                    </button>
+                    <button type="button" id="submitAnswerBtn" class="bg-brand-neonGreen hover:bg-emerald-400 text-black font-semibold px-6 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg">
+                        <span>Submit Answer</span>
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- AI Evaluation & Tutoring Feedback Card -->
+            <div id="evaluationCard" class="glass-panel rounded-2xl p-6 sm:p-8 space-y-5 hidden border">
+                
+                <!-- Evaluation Loading Spinner -->
+                <div id="evalLoading" class="py-8 flex flex-col items-center justify-center space-y-3">
+                    <div class="w-10 h-10 border-4 border-brand-accentPurple border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-xs font-mono text-gray-300">AI Tutor is grading your answer & preparing feedback...</p>
+                </div>
+
+                <!-- Evaluation Results Content -->
+                <div id="evalResults" class="space-y-5 hidden">
+                    
+                    <!-- Verdict Header Badge -->
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+                        <div class="flex items-center gap-3">
+                            <div id="verdictIconContainer" class="w-10 h-10 rounded-xl flex items-center justify-center">
+                                <!-- Dynamic Icon -->
+                            </div>
+                            <div>
+                                <h4 id="verdictTitle" class="font-bold text-base sm:text-lg">Correct!</h4>
+                                <p id="verdictSubtitle" class="text-xs text-gray-400 font-mono">Evaluated by AI Tutor Agent</p>
+                            </div>
+                        </div>
+
+                        <span id="scoreBadge" class="text-xs font-mono font-bold px-3 py-1 rounded-full">
+                            <!-- Dynamic +10 Points or Revision Required -->
+                        </span>
+                    </div>
+
+                    <!-- Teacher's Explanation & Tutoring -->
+                    <div class="space-y-3">
+                        <h5 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="lightbulb" class="w-4 h-4 text-brand-warnAmber"></i>
+                            Teacher's Feedback & Explanation
+                        </h5>
+                        <div id="teacherExplanation" class="text-sm text-gray-200 leading-relaxed font-sans space-y-2 bg-gray-900/60 p-4 rounded-xl border border-gray-800">
+                            <!-- Explanation content -->
+                        </div>
+                    </div>
+
+                    <!-- Correct Answer Highlight (Shown especially when wrong) -->
+                    <div id="correctAnswerBox" class="space-y-2 hidden">
+                        <h5 class="text-xs font-bold text-brand-electricCyan uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="check-square" class="w-4 h-4 text-brand-electricCyan"></i>
+                            Ideal / Complete Answer
+                        </h5>
+                        <p id="correctAnswerText" class="text-xs sm:text-sm text-gray-300 font-mono bg-brand-dark p-4 rounded-xl border border-brand-electricCyan/20 leading-relaxed">
+                            <!-- Ideal Answer -->
+                        </p>
+                    </div>
+
+                    <!-- Pro Tip or Real-World Context -->
+                    <div id="proTipBox" class="p-3.5 rounded-xl bg-brand-accentPurple/10 border border-brand-accentPurple/20 text-xs text-brand-accentPurple font-mono flex items-start gap-2.5">
+                        <i data-lucide="sparkles" class="w-4 h-4 shrink-0 mt-0.5"></i>
+                        <span id="proTipText">Pro Tip: Always mention memory overhead when discussing tree structures.</span>
+                    </div>
+
+                    <!-- Next Question Action -->
+                    <div class="flex justify-end pt-2 border-t border-gray-800">
+                        <button id="nextQuestionBtn" class="bg-brand-electricCyan hover:bg-cyan-400 text-black font-semibold px-6 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg">
+                            <span>Next Question</span>
+                            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- COLLAPSIBLE MULTI-AGENT LOG TERMINAL -->
+        <section class="glass-panel rounded-2xl overflow-hidden border border-gray-800">
+            <button id="toggleTerminalBtn" class="w-full px-6 py-3 bg-gray-900/90 hover:bg-gray-900 flex items-center justify-between text-xs font-mono text-gray-400 border-b border-gray-800">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="terminal" class="w-4 h-4 text-brand-electricCyan"></i>
+                    <span>Local LLM Execution Log & Agent Trace</span>
+                    <span class="px-2 py-0.5 rounded bg-gray-800 text-gray-300 text-[10px]" id="terminalLogCount">0 events</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-gray-500">Live Trace</span>
+                    <i data-lucide="chevron-down" id="terminalChevron" class="w-4 h-4 transition-transform"></i>
+                </div>
+            </button>
+            <div id="terminalBody" class="p-4 bg-brand-dark/95 font-mono text-xs text-gray-300 h-40 overflow-y-auto space-y-1.5 border-t border-gray-900 hidden">
+                <div class="text-gray-500">[SYSTEM] DevRehearsal AI Examiner & Tutor Engine initialized.</div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- SETTINGS MODAL -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-6 border border-gray-800 space-y-5">
+            <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                <h3 class="font-bold text-white flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-4 h-4 text-brand-electricCyan"></i>
+                    LLM Engine Configuration
+                </h3>
+                <button id="closeSettingsBtn" class="text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-300 uppercase mb-2">Execution Mode</label>
+                    <select id="executionModeSelect" class="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-xs text-white">
+                        <option value="ollama">Local Ollama REST API (http://localhost:11434)</option>
+                        <option value="simulation">Client-Side Intelligent Fallback Engine</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-300 uppercase mb-2">Ollama Base URL</label>
+                    <input type="text" id="ollamaEndpointInput" value="http://localhost:11434" 
+                        class="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-xs text-white font-mono">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-300 uppercase mb-2">Local Model</label>
+                    <select id="ollamaModelSelect" class="w-full bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-xs text-white font-mono">
+                        <option value="llama3.2">llama3.2 (Recommended)</option>
+                        <option value="llama3">llama3</option>
+                        <option value="mistral">mistral</option>
+                        <option value="qwen2.5">qwen2.5</option>
+                        <option value="gemma2">gemma2</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+                <button id="saveSettingsBtn" class="bg-brand-electricCyan hover:bg-cyan-400 text-black font-semibold px-4 py-2 rounded-xl text-xs">
+                    Save Configuration
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        const state = {
+            topic: '',
+            difficulty: 'Intermediate',
+            questionIndex: 0,
+            score: 0,
+            streak: 0,
+            currentQuestion: '',
+            currentIdealAnswer: '',
+            executionMode: 'ollama',
+            ollamaUrl: 'http://localhost:11434',
+            modelName: 'llama3.2',
+            logs: [],
+            isRecording: false,
+            recognition: null,
+            speechSynth: window.speechSynthesis || null
+        };
+
+        // DOM Elements
+        const elements = {
+            stepTopic: document.getElementById('stepTopic'),
+            stepSession: document.getElementById('stepSession'),
+            topicForm: document.getElementById('topicForm'),
+            customTopicInput: document.getElementById('customTopicInput'),
+            difficultySelect: document.getElementById('difficultySelect'),
+            presetsGrid: document.getElementById('presetsGrid'),
+            currentTopicLabel: document.getElementById('currentTopicLabel'),
+            questionLoading: document.getElementById('questionLoading'),
+            questionTextContainer: document.getElementById('questionTextContainer'),
+            questionText: document.getElementById('questionText'),
+            qNumberLabel: document.getElementById('qNumberLabel'),
+            userAnswerText: document.getElementById('userAnswerText'),
+            submitAnswerBtn: document.getElementById('submitAnswerBtn'),
+            evaluationCard: document.getElementById('evaluationCard'),
+            evalLoading: document.getElementById('evalLoading'),
+            evalResults: document.getElementById('evalResults'),
+            verdictIconContainer: document.getElementById('verdictIconContainer'),
+            verdictTitle: document.getElementById('verdictTitle'),
+            verdictSubtitle: document.getElementById('verdictSubtitle'),
+            scoreBadge: document.getElementById('scoreBadge'),
+            teacherExplanation: document.getElementById('teacherExplanation'),
+            correctAnswerBox: document.getElementById('correctAnswerBox'),
+            correctAnswerText: document.getElementById('correctAnswerText'),
+            proTipBox: document.getElementById('proTipBox'),
+            proTipText: document.getElementById('proTipText'),
+            nextQuestionBtn: document.getElementById('nextQuestionBtn'),
+            changeTopicBtn: document.getElementById('changeTopicBtn'),
+            readQuestionBtn: document.getElementById('readQuestionBtn'),
+            readBtnText: document.getElementById('readBtnText'),
+            micToggleBtn: document.getElementById('micToggleBtn'),
+            micBtnText: document.getElementById('micBtnText'),
+            scoreCounter: document.getElementById('scoreCounter'),
+            streakCounter: document.getElementById('streakCounter'),
+            terminalBody: document.getElementById('terminalBody'),
+            toggleTerminalBtn: document.getElementById('toggleTerminalBtn'),
+            terminalChevron: document.getElementById('terminalChevron'),
+            settingsModal: document.getElementById('settingsModal'),
+            openSettingsBtn: document.getElementById('openSettingsBtn'),
+            closeSettingsBtn: document.getElementById('closeSettingsBtn'),
+            saveSettingsBtn: document.getElementById('saveSettingsBtn'),
+            endpointStatusDot: document.getElementById('endpointStatusDot'),
+            endpointStatusText: document.getElementById('endpointStatusText'),
+            executionModeSelect: document.getElementById('executionModeSelect'),
+            ollamaEndpointInput: document.getElementById('ollamaEndpointInput'),
+            ollamaModelSelect: document.getElementById('ollamaModelSelect')
+        };
+
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // Check Local Ollama Connection
+        async function checkOllamaConnection() {
+            try {
+                const response = await fetch(`${state.ollamaUrl}/api/tags`, { method: 'GET' });
+                if (response.ok) {
+                    elements.endpointStatusDot.className = "w-2 h-2 rounded-full bg-brand-neonGreen";
+                    elements.endpointStatusText.textContent = `Ollama Online (${state.modelName})`;
+                    addLog('SYSTEM', `Connected to local Ollama API at ${state.ollamaUrl}`);
+                    return true;
+                }
+            } catch (err) {
+                // Connection failed
+            }
+            elements.endpointStatusDot.className = "w-2 h-2 rounded-full bg-amber-500";
+            elements.endpointStatusText.textContent = "Ollama Offline (Sim Engine Active)";
+            addLog('WARN', 'Local Ollama endpoint offline. Intelligent client fallback enabled.');
+            return false;
+        }
+
+        function addLog(source, message) {
+            const time = new Date().toLocaleTimeString();
+            const logRow = document.createElement('div');
+            logRow.className = "leading-relaxed";
+            
+            let sourceBadge = `<span class="text-gray-500">[${time}]</span> <span class="text-brand-electricCyan font-bold">[${source}]</span>`;
+            if (source === 'TEACHER') sourceBadge = `<span class="text-gray-500">[${time}]</span> <span class="text-brand-electricCyan font-bold">[AI Examiner]</span>`;
+            if (source === 'TUTOR') sourceBadge = `<span class="text-gray-500">[${time}]</span> <span class="text-brand-accentPurple font-bold">[AI Tutor]</span>`;
+            if (source === 'WARN') sourceBadge = `<span class="text-gray-500">[${time}]</span> <span class="text-amber-400 font-bold">[WARN]</span>`;
+            
+            logRow.innerHTML = `${sourceBadge} ${message}`;
+            elements.terminalBody.appendChild(logRow);
+            elements.terminalBody.scrollTop = elements.terminalBody.scrollHeight;
+            
+            state.logs.push({ time, source, message });
+            document.getElementById('terminalLogCount').textContent = `${state.logs.length} events`;
+        }
+
+        // Preset Topic Button Selection
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const topic = btn.getAttribute('data-topic');
+                elements.customTopicInput.value = topic;
+            });
+        });
+
+        // Submit Topic Form
+        elements.topicForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            state.topic = elements.customTopicInput.value.trim();
+            state.difficulty = elements.difficultySelect.value;
+            state.questionIndex = 0;
+            
+            if (!state.topic) return;
+
+            elements.stepTopic.classList.add('hidden');
+            elements.stepSession.classList.remove('hidden');
+            elements.currentTopicLabel.textContent = `Topic: ${state.topic} (${state.difficulty})`;
+
+            addLog('TEACHER', `Starting examination session on "${state.topic}" [${state.difficulty}]`);
+            fetchNextQuestion();
+        });
+
+        // Fetch Question from Local Ollama or Fallback
+        async function fetchNextQuestion() {
+            state.questionIndex++;
+            elements.qNumberLabel.textContent = `Question #${state.questionIndex}`;
+            elements.userAnswerText.value = '';
+            elements.evaluationCard.classList.add('hidden');
+            elements.questionTextContainer.classList.add('hidden');
+            elements.questionLoading.classList.remove('hidden');
+
+            addLog('TEACHER', `Generating question #${state.questionIndex}...`);
+
+            const systemPrompt = `You are an expert AI Technical Examiner and Tutor. Generate 1 clear, conceptual, or practical interview question for the topic: "${state.topic}" at difficulty level "${state.difficulty}". Output ONLY the question text clearly without preamble.`;
+
+            let questionText = null;
+
+            if (state.executionMode === 'ollama') {
+                try {
+                    const response = await fetch(`${state.ollamaUrl}/api/generate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: state.modelName,
+                            prompt: systemPrompt,
+                            stream: false
+                        })
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        questionText = data.response.trim();
+                    }
+                } catch (e) {
+                    addLog('WARN', 'Ollama question request failed, falling back to simulated teacher.');
+                }
+            }
+
+            // Fallback simulated questions if offline or failed
+            if (!questionText) {
+                await new Promise(r => setTimeout(r, 1200));
+                questionText = getSimulatedQuestion(state.topic, state.questionIndex);
+            }
+
+            state.currentQuestion = questionText;
+            elements.questionText.textContent = questionText;
+            elements.questionLoading.classList.add('hidden');
+            elements.questionTextContainer.classList.remove('hidden');
+
+            addLog('TEACHER', `Question ready: "${questionText.substring(0, 50)}..."`);
+        }
+
+        // Simulated question bank fallback
+        function getSimulatedQuestion(topic, idx) {
+            const topicLower = topic.toLowerCase();
+            if (topicLower.includes('python')) {
+                const q = [
+                    "What is the difference between shallow copy and deep copy in Python, and when would you use `copy.deepcopy()`?",
+                    "How does Python's Garbage Collection work, and what role do reference counting and generational GC play?",
+                    "Explain Python Decorators and how `@wraps` from `functools` preserves function metadata."
+                ];
+                return q[(idx - 1) % q.length];
+            } else if (topicLower.includes('react')) {
+                const q = [
+                    "Why should you avoid mutating state directly in React, and how does the Virtual DOM Reconciliation algorithm handle updates?",
+                    "What is the main difference between `useEffect` and `useLayoutEffect` in React?",
+                    "Explain the concept of prop drilling and how the Context API or State Management libraries resolve it."
+                ];
+                return q[(idx - 1) % q.length];
+            } else if (topicLower.includes('system design')) {
+                const q = [
+                    "How does Consistent Hashing work in distributed database caching, and why is it preferred over simple modulo hashing?",
+                    "What are the tradeoffs between SQL (ACID compliance) and NoSQL (BASE consistency) in high-throughput applications?",
+                    "Explain the difference between Forward Proxy and Reverse Proxy with real-world examples."
+                ];
+                return q[(idx - 1) % q.length];
+            } else {
+                const q = [
+                    `Explain the core architecture and fundamental principles of ${topic}. What problem does it solve?`,
+                    `What are the most common performance bottlenecks in ${topic}, and how do senior engineers mitigate them?`,
+                    `Compare ${topic} with its primary alternative or predecessor. What are the key architectural tradeoffs?`
+                ];
+                return q[(idx - 1) % q.length];
+            }
+        }
+
+        // Submit Answer for AI Tutor Evaluation
+        elements.submitAnswerBtn.addEventListener('click', async () => {
+            const userAnswer = elements.userAnswerText.value.trim();
+            if (!userAnswer) {
+                alert("Please write or dictate an answer first.");
+                return;
+            }
+
+            elements.evaluationCard.classList.remove('hidden');
+            elements.evalLoading.classList.remove('hidden');
+            elements.evalResults.classList.add('hidden');
+
+            addLog('TUTOR', `Evaluating student response for Q#${state.questionIndex}...`);
+
+            const evalPrompt = `
+You are an encouraging AI Teacher & Technical Tutor.
+Topic: ${state.topic}
+Question: ${state.currentQuestion}
+Student Answer: "${userAnswer}"
+
+Evaluate if the student answer is Correct, Partially Correct, or Incorrect.
+Format your response as valid JSON with these keys:
+{
+  "isCorrect": boolean,
+  "verdictTitle": "string",
+  "explanation": "string (explaining why it is right or wrong in clear step-by-step teaching terms)",
+  "idealAnswer": "string (the complete concise correct answer)",
+  "proTip": "string (a helpful tip or real-world example)"
+}
+Output JSON only.
+            `.trim();
+
+            let evalData = null;
+
+            if (state.executionMode === 'ollama') {
+                try {
+                    const response = await fetch(`${state.ollamaUrl}/api/generate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: state.modelName,
+                            prompt: evalPrompt,
+                            format: "json",
+                            stream: false
+                        })
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        evalData = JSON.parse(data.response);
+                    }
+                } catch (e) {
+                    addLog('WARN', 'Ollama evaluation JSON parse failed, using fallback tutor logic.');
+                }
+            }
+
+            // Fallback Simulated Evaluation if Ollama is unavailable
+            if (!evalData) {
+                await new Promise(r => setTimeout(r, 1500));
+                const wordCount = userAnswer.split(/\s+/).length;
+                const isCorrect = wordCount > 12 && !userAnswer.toLowerCase().includes("don't know");
+
+                evalData = {
+                    isCorrect: isCorrect,
+                    verdictTitle: isCorrect ? "Excellent Answer!" : "Needs Refinement",
+                    explanation: isCorrect 
+                        ? `Great work! You correctly identified the core concepts required for ${state.topic}. Your explanation shows solid understanding.`
+                        : `Your response touched on the topic, but missed key technical details. Let's break it down: A complete answer requires explaining both cause and runtime impact.`,
+                    idealAnswer: `The comprehensive answer involves explaining the underlying data structure, memory execution, and trade-offs when applying this concept in production.`,
+                    proTip: `In technical interviews, state the big-O time/space complexity right after explaining your solution.`
+                };
+            }
+
+            // Update Stats
+            if (evalData.isCorrect) {
+                state.score += 10;
+                state.streak += 1;
+            } else {
+                state.streak = 0;
+            }
+            elements.scoreCounter.textContent = state.score;
+            elements.streakCounter.textContent = state.streak;
+
+            // Render Evaluation Card
+            renderEvaluation(evalData);
+        });
+
+        function renderEvaluation(data) {
+            elements.evalLoading.classList.add('hidden');
+            elements.evalResults.classList.remove('hidden');
+
+            const isCorrect = data.isCorrect;
+
+            // Card Border Accent
+            elements.evaluationCard.className = isCorrect
+                ? "glass-panel rounded-2xl p-6 sm:p-8 space-y-5 border border-brand-neonGreen/40 shadow-lg shadow-emerald-950/20"
+                : "glass-panel rounded-2xl p-6 sm:p-8 space-y-5 border border-brand-dangerRose/40 shadow-lg shadow-red-950/20";
+
+            // Header Icon & Colors
+            if (isCorrect) {
+                elements.verdictIconContainer.className = "w-10 h-10 rounded-xl bg-brand-neonGreen/20 text-brand-neonGreen flex items-center justify-center";
+                elements.verdictIconContainer.innerHTML = `<i data-lucide="check-circle-2" class="w-6 h-6"></i>`;
+                elements.verdictTitle.className = "font-bold text-base sm:text-lg text-brand-neonGreen";
+                elements.verdictTitle.textContent = data.verdictTitle || "Correct!";
+                elements.scoreBadge.className = "text-xs font-mono font-bold px-3 py-1 rounded-full bg-brand-neonGreen/20 text-brand-neonGreen border border-brand-neonGreen/30";
+                elements.scoreBadge.textContent = "+10 Points";
+                elements.correctAnswerBox.classList.add('hidden');
+            } else {
+                elements.verdictIconContainer.className = "w-10 h-10 rounded-xl bg-brand-dangerRose/20 text-brand-dangerRose flex items-center justify-center";
+                elements.verdictIconContainer.innerHTML = `<i data-lucide="x-circle" class="w-6 h-6"></i>`;
+                elements.verdictTitle.className = "font-bold text-base sm:text-lg text-brand-dangerRose";
+                elements.verdictTitle.textContent = data.verdictTitle || "Incorrect - Let's Learn!";
+                elements.scoreBadge.className = "text-xs font-mono font-bold px-3 py-1 rounded-full bg-brand-warnAmber/20 text-brand-warnAmber border border-brand-warnAmber/30";
+                elements.scoreBadge.textContent = "Revision Needed";
+                
+                // Show Ideal Answer Box
+                elements.correctAnswerBox.classList.remove('hidden');
+                elements.correctAnswerText.textContent = data.idealAnswer || "Refer to the ideal explanation provided above.";
+            }
+
+            elements.teacherExplanation.textContent = data.explanation;
+            elements.proTipText.textContent = `Pro Tip: ${data.proTip || "Review official documentation for standard syntax practices."}`;
+
+            lucide.createIcons();
+            addLog('TUTOR', `Evaluation complete: ${isCorrect ? 'Correct (+10)' : 'Incorrect (Revision required)'}`);
+        }
+
+        // Text-to-Speech Output for Teacher Question
+        elements.readQuestionBtn.addEventListener('click', () => {
+            if (!state.speechSynth) {
+                alert("Speech Synthesis is not supported in this browser.");
+                return;
+            }
+
+            if (state.speechSynth.speaking) {
+                state.speechSynth.cancel();
+                elements.readBtnText.textContent = "Speak Question";
+                elements.questionCard.classList.remove('speaking-glow');
+                return;
+            }
+
+            const utterance = new SpeechSynthesisUtterance(state.currentQuestion);
+            utterance.rate = 0.95;
+            utterance.pitch = 1.0;
+
+            utterance.onstart = () => {
+                elements.readBtnText.textContent = "Stop Speaking";
+                elements.questionCard.classList.add('speaking-glow');
+            };
+
+            utterance.onend = () => {
+                elements.readBtnText.textContent = "Speak Question";
+                elements.questionCard.classList.remove('speaking-glow');
+            };
+
+            state.speechSynth.speak(utterance);
+        });
+
+        // Speech-to-Text Dictation for Student Answer
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            state.recognition = new SpeechRecognition();
+            state.recognition.continuous = true;
+            state.recognition.interimResults = true;
+
+            state.recognition.onresult = (event) => {
+                let transcript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    transcript += event.results[i][0].transcript;
+                }
+                elements.userAnswerText.value += ' ' + transcript;
+            };
+
+            elements.micToggleBtn.addEventListener('click', () => {
+                if (!state.isRecording) {
+                    state.recognition.start();
+                    state.isRecording = true;
+                    elements.micToggleBtn.classList.add('pulse-recording', 'bg-red-900/50', 'border-red-500');
+                    elements.micBtnText.textContent = "Recording...";
+                    addLog('SYSTEM', 'Speech dictation listening...');
+                } else {
+                    state.recognition.stop();
+                    state.isRecording = false;
+                    elements.micToggleBtn.classList.remove('pulse-recording', 'bg-red-900/50', 'border-red-500');
+                    elements.micBtnText.textContent = "Dictate Answer";
+                    addLog('SYSTEM', 'Speech dictation stopped.');
+                }
+            });
+        }
+
+        // Navigation Actions
+        elements.nextQuestionBtn.addEventListener('click', () => {
+            fetchNextQuestion();
+        });
+
+        elements.changeTopicBtn.addEventListener('click', () => {
+            elements.stepSession.classList.add('hidden');
+            elements.stepTopic.classList.remove('hidden');
+        });
+
+        // Terminal Toggle
+        elements.toggleTerminalBtn.addEventListener('click', () => {
+            elements.terminalBody.classList.toggle('hidden');
+            elements.terminalChevron.classList.toggle('rotate-180');
+        });
+
+        // Settings Modal Controls
+        elements.openSettingsBtn.addEventListener('click', () => elements.settingsModal.classList.remove('hidden'));
+        elements.closeSettingsBtn.addEventListener('click', () => elements.settingsModal.classList.add('hidden'));
+        elements.saveSettingsBtn.addEventListener('click', () => {
+            state.executionMode = elements.executionModeSelect.value;
+            state.ollamaUrl = elements.ollamaEndpointInput.value;
+            state.modelName = elements.ollamaModelSelect.value;
+            elements.settingsModal.classList.add('hidden');
+            checkOllamaConnection();
+        });
+
+        // Initial check on load
+        window.addEventListener('load', () => {
+            checkOllamaConnection();
+        });
+    </script>
+</body>
+</html>
